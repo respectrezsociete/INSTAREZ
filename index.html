@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>INSTAREZ — a simple Instagram-like demo</title>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--accent:#ff6b6b;--muted:#94a3b8;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}body{margin:0;font-family:Inter, Roboto, system-ui, sans-serif;background:linear-gradient(180deg,#071025 0%,#0b1220 100%);color:#e6eef8}
+    .app{max-width:980px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .brand{display:flex;gap:12px;align-items:center}
+    .logo{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,#ff9a9e,#fecfef);display:flex;align-items:center;justify-content:center;font-weight:700;color:#0b1220}
+    h1{font-size:18px;margin:0}
+    .card{background:var(--card);padding:14px;border-radius:12px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .columns{display:grid;grid-template-columns:1fr 320px;gap:18px}
+    .feed{display:flex;flex-direction:column;gap:12px}
+    .post{background:var(--glass);padding:12px;border-radius:10px}
+    .post .meta{display:flex;align-items:center;gap:10px}
+    .avatar{width:44px;height:44px;border-radius:999px;background:#111;display:flex;align-items:center;justify-content:center;color:#9fb4d9;font-weight:700}
+    .username{font-weight:600}
+    .image-preview{margin-top:10px;border-radius:8px;overflow:hidden}
+    img.resp{width:100%;height:auto;display:block}
+    .actions{display:flex;gap:10px;margin-top:8px}
+    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:8px;color:inherit;cursor:pointer}
+    input,textarea,select{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px;border-radius:8px;color:inherit;width:100%}
+    .sidebar .profile{display:flex;align-items:center;gap:12px}
+    .small-muted{color:var(--muted);font-size:13px}
+    .center{display:flex;align-items:center;justify-content:center}
+    footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+    .like.active{color:var(--accent);border-color:rgba(255,107,107,0.25)}
+    .comment-list{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+    .comment{font-size:13px;color:#dbe8ff}
+    .login-card{max-width:420px;margin:40px auto}
+    .hidden{display:none}
+    @media(max-width:880px){.columns{grid-template-columns:1fr} .sidebar{order:2}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">RZ</div>
+        <div>
+          <h1>INSTAREZ</h1>
+          <div class="small-muted">A lightweight Instagram-like demo (mock)</div>
+        </div>
+      </div>
+      <div id="top-actions"></div>
+    </header>
+
+    <main class="columns">
+      <div>
+        <div id="auth-area" class="card login-card"></div>
+
+        <div id="create-post-area" class="card hidden"></div>
+
+        <div class="feed" id="feed"></div>
+      </div>
+
+      <aside class="sidebar">
+        <div class="card">
+          <div class="profile">
+            <div class="avatar" id="side-avatar">RZ</div>
+            <div>
+              <div id="side-username" class="username">Guest</div>
+              <div class="small-muted" id="side-bio">Welcome to INSTAREZ</div>
+            </div>
+          </div>
+          <hr style="margin:12px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)" />
+          <div class="small-muted">Suggestions (mock)</div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-direction:column">
+            <div class="small-muted">@photog_mock</div>
+            <div class="small-muted">@travel_mock</div>
+            <div class="small-muted">@food_mock</div>
+          </div>
+        </div>
+
+        <div style="height:14px"></div>
+
+        <div class="card small-muted center">INSTAREZ © 2025</div>
+      </aside>
+    </main>
+
+    <footer>This is a local demo that uses your browser's storage. Not connected to any real Instagram services.</footer>
+  </div>
+
+<script>
+// Simple INSTAREZ demo: frontend-only, stores data in localStorage.
+// Data model: users: {username:{displayName,pass,bio,avatar}} posts: [{id,author,caption,imageData,likes:[user],comments:[{by,text}],created}]
+
+const KEY = 'instarez_v1';
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{users:{},posts:[]}}catch(e){return {users:{},posts:[]}}}
+function save(state){localStorage.setItem(KEY,JSON.stringify(state))}
+let state = load();
+let currentUser = null;
+
+// Helpers
+function id(){return Math.random().toString(36).slice(2,9)}
+function timeNow(){return new Date().toISOString()}
+
+// Init demo account if none
+if(!Object.keys(state.users).length){state.users['rez_demo']={displayName:'Rez Demo',pass:'demo',bio:'Hello from INSTAREZ demo',avatarText:'RZ'};save(state)}
+
+// --- Auth UI ---
+const authArea = document.getElementById('auth-area');
+const topActions = document.getElementById('top-actions');
+function renderAuth(){authArea.innerHTML='';topActions.innerHTML='';
+  if(!currentUser){
+    const c = document.createElement('div');c.className='card';
+    c.innerHTML = `
+      <h3>Sign in / Create account</h3>
+      <div style="display:grid;gap:8px;margin-top:8px">
+        <input id="a_user" placeholder="username (no spaces)" />
+        <input id="a_pass" placeholder="password" type="password" />
+        <div style="display:flex;gap:8px">
+          <button id="btn_signin">Sign in</button>
+          <button id="btn_signup">Create</button>
+        </div>
+      </div>`;
+    authArea.appendChild(c);
+    document.getElementById('btn_signin').onclick = ()=>{
+      const u=document.getElementById('a_user').value.trim(); const p=document.getElementById('a_pass').value;
+      if(!u||!p){alert('fill both');return}
+      if(state.users[u] && state.users[u].pass===p){currentUser=u;renderAll();}else{alert('wrong credentials or user not found')}
+    }
+    document.getElementById('btn_signup').onclick = ()=>{
+      const u=document.getElementById('a_user').value.trim(); const p=document.getElementById('a_pass').value;
+      if(!u||!p){alert('fill both');return}
+      if(state.users[u]){alert('username taken');return}
+      state.users[u]={displayName:u,pass:p,bio:'',avatarText:u.slice(0,2).toUpperCase()};save(state);currentUser=u;renderAll();
+    }
+  } else {
+    const c = document.createElement('div');c.className='card';
+    c.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700">${currentUser}</div>
+          <div class="small-muted">Signed in</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button id="btn_profile">Profile</button>
+          <button id="btn_logout">Log out</button>
+        </div>
+      </div>`;
+    authArea.appendChild(c);
+    document.getElementById('btn_logout').onclick=()=>{currentUser=null;renderAll()}
+    document.getElementById('btn_profile').onclick=()=>{openProfileModal()}
+
+    // top actions: new post
+    const btnNew=document.createElement('button');btnNew.textContent='New post';btnNew.onclick=()=>{showCreatePost()};topActions.appendChild(btnNew);
+  }
+}
+
+// --- Create post area ---
+const createArea = document.getElementById('create-post-area');
+function showCreatePost(){createArea.classList.remove('hidden');createArea.innerHTML='';
+  const c=document.createElement('div');c.className='card';
+  c.innerHTML=`<h3>Create a post</h3>
+    <div style="display:grid;gap:8px;margin-top:8px">
+      <input id="post_caption" placeholder="Write a caption..." />
+      <input id="post_file" type="file" accept="image/*" />
+      <div class="image-preview" id="preview"></div>
+      <div style="display:flex;gap:8px">
+        <button id="btn_post">Publish</button>
+        <button id="btn_cancel">Cancel</button>
+      </div>
+    </div>`;
+  createArea.appendChild(c);
+  const file = document.getElementById('post_file'); const preview=document.getElementById('preview');
+  file.onchange = ()=>{
+    const f = file.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{preview.innerHTML=`<img class="resp" src="${r.result}" />`; preview.dataset.src=r.result}; r.readAsDataURL(f);
+  }
+  document.getElementById('btn_cancel').onclick=()=>{createArea.classList.add('hidden')}
+  document.getElementById('btn_post').onclick=()=>{
+    const caption=document.getElementById('post_caption').value.trim(); const img=preview.dataset.src||'';
+    if(!img){alert('choose an image');return}
+    const p={id:id(),author:currentUser,caption,imageData:img,likes:[],comments:[],created:timeNow()};
+    state.posts.unshift(p); save(state); renderFeed(); createArea.classList.add('hidden');
+  }
+}
+
+// --- Feed ---
+const feedEl = document.getElementById('feed');
+function renderFeed(){feedEl.innerHTML=''; if(!state.posts.length){feedEl.innerHTML='<div class="card small-muted">No posts yet. Create one!</div>';return}
+  state.posts.forEach(post=>{const el=document.createElement('div');el.className='post card';
+    el.innerHTML = `
+      <div class="meta">
+        <div class="avatar">${(state.users[post.author] && state.users[post.author].avatarText) || post.author.slice(0,2).toUpperCase()}</div>
+        <div style="flex:1">
+          <div class="username">${post.author}</div>
+          <div class="small-muted">${new Date(post.created).toLocaleString()}</div>
+        </div>
+      </div>
+      <div class="image-preview"><img class="resp" src="${post.imageData}"/></div>
+      <div style="margin-top:8px">${post.caption||''}</div>
+      <div class="actions">
+        <button class="like ${currentUser && post.likes.includes(currentUser)?'active':''}">❤ <span class="like-count">${post.likes.length}</span></button>
+        <button class="btn_comment">💬 Comment</button>
+        ${currentUser===post.author?'<button class="btn_del">Delete</button>':''}
+      </div>
+      <div class="comment-list">${post.comments.map(c=>`<div class="comment"><strong>${c.by}</strong>: ${c.text}</div>`).join('')}</div>
+      <div class="add-comment" style="margin-top:8px;display:flex;gap:8px">
+        <input class="comment-input" placeholder="Add a comment..." />
+        <button class="comment-send">Send</button>
+      </div>
+    `;
+    // events
+    el.querySelector('.like').onclick = ()=>{
+      if(!currentUser){alert('sign in first');return}
+      const idx = post.likes.indexOf(currentUser);
+      if(idx==-1) post.likes.push(currentUser); else post.likes.splice(idx,1);
+      save(state); renderFeed();
+    }
+    const cbtn = el.querySelector('.comment-send'); cbtn.onclick = ()=>{
+      if(!currentUser){alert('sign in first');return}
+      const inp = el.querySelector('.comment-input'); const txt = inp.value.trim(); if(!txt) return; post.comments.push({by:currentUser,text:txt}); save(state); renderFeed();
+    }
+    const del = el.querySelector('.btn_del'); if(del) del.onclick=()=>{if(confirm('Delete post?')){state.posts = state.posts.filter(p=>p.id!==post.id); save(state); renderAll()}}
+
+    feedEl.appendChild(el);
+  })
+}
+
+// --- Profile modal ---
+function openProfileModal(){
+  const modal = document.createElement('div'); modal.style.position='fixed'; modal.style.inset=0; modal.style.background='rgba(0,0,0,0.6)'; modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center';
+  const box=document.createElement('div'); box.className='card'; box.style.width='420px'; box.innerHTML=`
+    <h3>Edit profile</h3>
+    <div style="display:grid;gap:8px">
+      <input id="pf_name" placeholder="Display name" />
+      <input id="pf_bio" placeholder="Bio" />
+      <input id="pf_avatar" placeholder="Avatar letters" />
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="pf_cancel">Cancel</button>
+        <button id="pf_save">Save</button>
+      </div>
+    </div>
+  `;
+  modal.appendChild(box); document.body.appendChild(modal);
+  document.getElementById('pf_name').value = state.users[currentUser].displayName||currentUser;
+  document.getElementById('pf_bio').value = state.users[currentUser].bio||'';
+  document.getElementById('pf_avatar').value = state.users[currentUser].avatarText||currentUser.slice(0,2).toUpperCase();
+  document.getElementById('pf_cancel').onclick=()=>{document.body.removeChild(modal)}
+  document.getElementById('pf_save').onclick=()=>{
+    state.users[currentUser].displayName = document.getElementById('pf_name').value||currentUser;
+    state.users[currentUser].bio = document.getElementById('pf_bio').value||'';
+    state.users[currentUser].avatarText = document.getElementById('pf_avatar').value||currentUser.slice(0,2).toUpperCase();
+    save(state); document.body.removeChild(modal); renderAll();
+  }
+}
+
+// --- Render side bar and top
+function renderSide(){document.getElementById('side-username').textContent = currentUser||'Guest';
+  document.getElementById('side-bio').textContent = currentUser? (state.users[currentUser].bio||'') : 'Sign in to post and interact';
+  document.getElementById('side-avatar').textContent = currentUser? (state.users[currentUser].avatarText||currentUser.slice(0,2).toUpperCase()):'RZ';
+}
+
+function renderAll(){renderAuth();renderSide();renderFeed(); createArea.classList.add('hidden')}
+
+renderAll();
+
+// Note: This app is intentionally simple. You can export/import state via console:
+// localStorage.getItem('instarez_v1')  and set it with localStorage.setItem('instarez_v1', JSON.stringify(...))
+
+</script>
+</body>
+</html>
